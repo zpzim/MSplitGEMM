@@ -78,16 +78,23 @@ void PrintMatrix(char name[], int rows, int cols, const float* m){
 }
 
 
-void copyElements(float* out, float* entry, unsigned long long eRows, unsigned long long eCols, unsigned long long oRows, unsigned long long oCols, unsigned long long x, unsigned long long y){
-	for(unsigned long long i = 0; i < eRows; ++i){
-		for(unsigned long long j = 0; j < eCols; ++j){
+void copyElements(float* out, float* entry, unsigned long long eRows, unsigned long long eCols, unsigned long long oRows, unsigned long long oCols, unsigned long long x, unsigned long long y,
+	unsigned long long ofA, unsigned long long ofB){
+	unsigned long long counterRows = eRows;
+	unsigned long long counterCols = eCols;
+	if(ofA){
+		counterRows = ofA;
+	}
+	if(ofB){
+		counterCols = ofB;	
+	}
+	for(unsigned long long i = 0; i < counterRows; ++i){
+		for(unsigned long long j = 0; j < counterCols; ++j){
+			
 			out[x*eRows*oCols + (i*oCols) + (y*eCols + j)] = entry[i*eCols + j];
 		}
 
 	}
-
-
-
 }
 
 
@@ -137,7 +144,7 @@ void msplitm(char transa, char transb, unsigned long long m, unsigned long long 
 	float* temp3 = 0;
 	
 	cudaMallocHost((void**) &temp3, sizeof(float)*subCols * k );
-	for(unsigned long long i = 0; i < numSubMatrixB; ++i){
+	for(unsigned long long i = 0; i < numSubMatrixB + 1; ++i){
 		int count = 0;
 		if(overflowB == 0 && i == numSubMatrixB){
 			break;
@@ -155,7 +162,8 @@ void msplitm(char transa, char transb, unsigned long long m, unsigned long long 
 	
 		cudaMemcpyAsync(b, temp3, sizeof(float)*subCols*k, cudaMemcpyHostToDevice, streams[0]);
 		unsigned long long y = 0;
-		while(y < numSubMatrixA){
+		int streamsActive = 0;
+		while(y < numSubMatrixA + 1){
 			if(overflowA == 0 && y == numSubMatrixA){
 				break;
 			}
@@ -172,17 +180,44 @@ void msplitm(char transa, char transb, unsigned long long m, unsigned long long 
 			printf("sending multiply %d,%d to stream %d\n", y, i, y % numStreams);
 			doMultiply2Matrices(subRows, k, a[y % numStreams], k, subCols, b, c[y % numStreams], streams[y % numStreams], handles[y % numStreams]); 	
 			cudaMemcpyAsync(c_h[y % numStreams], c[y % numStreams], sizeof(float)*subRows*subCols, cudaMemcpyDeviceToHost, streams[y % numStreams]);
+			streamsActive++;
 			if(y % numStreams == numStreams - 1){
 				cudaDeviceSynchronize();
 				for(int s = 0; s < numStreams; ++s){
-					//TODO:Currently does not work with overflowA != 0 or overflowB != 0
-					copyElements(C, c_h[s], subRows, subCols, m, n, count * numStreams + s, i);
+					int currStream = count * numStreams + s;
+					if(i == numSubMatrixB && currStream == numSubMatrixA){
+						copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, overflowA, overflowB);
+					}else if(i == numSubMatrixB){
+						copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, 0, overflowB);
+					}else if(currStream == numSubMatrixA){
+						copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, overflowA, 0);
+					}else{
+						copyElements(C, c_h[s], subRows, subCols, m, n, currStream, i, 0, 0);
+					}
+					streamsActive--;
 				}
 				++count;
 			}
 			++y;
 
 		}
+		printf("%d Streams Active Left over\n", streamsActive);
+		cudaDeviceSynchronize();
+		for(int s = 0; s < streamsActive; ++s){
+			int currStream = count * numStreams + s;
+			if(i == numSubMatrixB && currStream == numSubMatrixA){
+				copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, overflowA, overflowB);
+			}else if(i == numSubMatrixB){
+				copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, 0, overflowB);
+			}else if(currStream == numSubMatrixA){
+				copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, overflowA, 0);
+			}else{
+				copyElements(C, c_h[s], subRows, subCols, m, n, currStream, i, 0, 0);
+			}
+
+		}
+		
+		
 		
 	
 	}
