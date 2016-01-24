@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
+#include "common.h"
 
 const int num_submatrix = 8;
 
@@ -23,41 +24,6 @@ void copyElements(float* out, float* entry, unsigned long long eRows, unsigned l
 
 
 
-}
-
-
-float * doMultiply2Matrices(
-        int a1Rows, int a1Cols,  float * A1,
-        int a2Rows, int a2Cols,  float * A2,
-	float* C, float alpha, float beta)
-{
-    cublasHandle_t  handle;
-
-    cublasCreate (&handle ) ;
-
-    cublasSgemm(handle,CUBLAS_OP_N, CUBLAS_OP_N,
-                  a2Cols, a1Rows, a1Cols,
-                  &alpha,
-                  A2, a2Cols,
-                  A1, a1Cols,
-                  &beta,
-                  C, a2Cols );
-
-    cublasDestroy ( handle ) ;
-
-    return C ;
-
-
-}
-
-void PrintMatrix(char name[], int rows, int cols, const float* m){
-  printf("%s\n", name);
-  for(int row = 0; row < rows; ++row){
-	for(int col = 0; col < cols; ++col){
-		printf("%f ", m[row * cols + col]);
-	}
-	printf("\n");
-  }
 }
 
 
@@ -135,18 +101,18 @@ void msplitm(char transa, char transb, unsigned long long m, unsigned long long 
 				if(overflowB == 0 && x == numSubMatrixB){
 					break;
 				}
-				doMultiply2Matrices(subRows, k, temp2, k, subCols, B_split[x], temp3, alpha, beta);
+				doMultiply2Matrices(subRows, k, temp2, k, subCols, B_split[x], temp3, alpha);
 				
 				cudaMemcpy(temp, temp3, sizeof(float)*subRows*subCols,cudaMemcpyDeviceToHost);
 
 			if(x == numSubMatrixB && i == numSubMatrixA){
-				copyElements(C, temp, subRows, subCols, m, n, i, x, overflowA, overflowB);
+				copyElements(C, temp, subRows, subCols, m, n, i, x, overflowA, overflowB, beta);
 			}else if(x == numSubMatrixB){
-				copyElements(C, temp, subRows, subCols, m, n, i, x, 0, overflowB);
+				copyElements(C, temp, subRows, subCols, m, n, i, x, 0, overflowB, beta);
 			}else if(i == numSubMatrixA){
-				copyElements(C, temp, subRows, subCols, m, n, i, x, overflowA, 0);
+				copyElements(C, temp, subRows, subCols, m, n, i, x, overflowA, 0, beta);
 			}else{
-				copyElements(C, temp, subRows, subCols, m, n, i, x, 0, 0);
+				copyElements(C, temp, subRows, subCols, m, n, i, x, 0, 0, beta);
 			}
 		}
 		

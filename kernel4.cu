@@ -4,6 +4,8 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include "common.h"
+
 const int num_submatrix = 2;
 const int numStreams = 2;
 const int num_threads = numStreams;
@@ -39,63 +41,6 @@ struct thread_args targs[num_threads];
 pthread_t threads[num_threads];
 char threads_active[num_threads];
 cublasHandle_t handles[num_threads];
-
-
-
-float * doMultiply2Matrices(
-        int a1Rows, int a1Cols,  float * A1,
-        int a2Rows, int a2Cols,  float * A2,
-	float* C, cudaStream_t cudaStream, cublasHandle_t handle)
-{
-
-    float alpha = 1.0;
-    float beta =  0.0;
-
-    cublasSetStream(handle, cudaStream) ;
-
-    cublasStatus_t stat = cublasSgemm(handle,CUBLAS_OP_N, CUBLAS_OP_N,
-                  a2Cols, a1Rows, a1Cols,
-                  &alpha,
-                  A2, a2Cols,
-                  A1, a1Cols,
-                  &beta,
-                  C, a2Cols );
-    printf("cublas status = %d\n", stat);
-
-    return C ;
-
-
-}
-
-void PrintMatrix(char name[], int rows, int cols, const float* m){
-  printf("%s\n", name);
-  for(int row = 0; row < rows; ++row){
-	for(int col = 0; col < cols; ++col){
-		printf("%f ", m[row * cols + col]);
-	}
-	printf("\n");
-  }
-}
-
-
-void copyElements(float* out, float* entry, unsigned long long eRows, unsigned long long eCols, unsigned long long oRows, unsigned long long oCols, unsigned long long x, unsigned long long y,
-	unsigned long long ofA, unsigned long long ofB){
-	unsigned long long counterRows = eRows;
-	unsigned long long counterCols = eCols;
-	if(ofA){
-		counterRows = ofA;
-	}
-	if(ofB){
-		counterCols = ofB;	
-	}
-	for(unsigned long long i = 0; i < counterRows; ++i){
-		for(unsigned long long j = 0; j < counterCols; ++j){
-			
-			out[x*eRows*oCols + (i*oCols) + (y*eCols + j)] = entry[i*eCols + j];
-		}
-
-	}
-}
 
 
 void msplitm(char transa, char transb, unsigned long long m, unsigned long long n, unsigned long long k, float alpha, float *A, int lda, const float *B, int ldb, float beta, float *C, int ldc)
@@ -176,23 +121,25 @@ void msplitm(char transa, char transb, unsigned long long m, unsigned long long 
 					}
 				}			
 			}
+			
 			cudaMemcpyAsync(a[y % numStreams], a_h[y % numStreams], sizeof(float)*subRows*k, cudaMemcpyHostToDevice, streams[y % numStreams]);
 			printf("sending multiply %d,%d to stream %d\n", y, i, y % numStreams);
-			doMultiply2Matrices(subRows, k, a[y % numStreams], k, subCols, b, c[y % numStreams], streams[y % numStreams], handles[y % numStreams]); 	
+			doMultiply2MatricesStreaming(subRows, k, a[y % numStreams], k, subCols, b, c[y % numStreams], streams[y % numStreams], handles[y % numStreams], alpha); 	
 			cudaMemcpyAsync(c_h[y % numStreams], c[y % numStreams], sizeof(float)*subRows*subCols, cudaMemcpyDeviceToHost, streams[y % numStreams]);
+						
 			streamsActive++;
 			if(y % numStreams == numStreams - 1){
-				cudaDeviceSynchronize();
 				for(int s = 0; s < numStreams; ++s){
-					int currStream = count * numStreams + s;
-					if(i == numSubMatrixB && currStream == numSubMatrixA){
-						copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, overflowA, overflowB);
+					cudaStreamSynchronize(streams[s]);
+					int currWork = count * numStreams + s;
+					if(i == numSubMatrixB && currWork == numSubMatrixA){
+						copyElements(C,  c_h[s], subRows, subCols, m, n, currWork, i, overflowA, overflowB, beta);
 					}else if(i == numSubMatrixB){
-						copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, 0, overflowB);
-					}else if(currStream == numSubMatrixA){
-						copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, overflowA, 0);
+						copyElements(C,  c_h[s], subRows, subCols, m, n, currWork, i, 0, overflowB, beta);
+					}else if(currWork == numSubMatrixA){
+						copyElements(C,  c_h[s], subRows, subCols, m, n, currWork, i, overflowA, 0, beta);
 					}else{
-						copyElements(C, c_h[s], subRows, subCols, m, n, currStream, i, 0, 0);
+						copyElements(C, c_h[s], subRows, subCols, m, n, currWork, i, 0, 0, beta);
 					}
 					streamsActive--;
 				}
@@ -201,18 +148,19 @@ void msplitm(char transa, char transb, unsigned long long m, unsigned long long 
 			++y;
 
 		}
+		PrintMatrix("C", m, n, C);
 		printf("%d Streams Active Left over\n", streamsActive);
-		cudaDeviceSynchronize();
 		for(int s = 0; s < streamsActive; ++s){
-			int currStream = count * numStreams + s;
-			if(i == numSubMatrixB && currStream == numSubMatrixA){
-				copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, overflowA, overflowB);
+			cudaStreamSynchronize(streams[s]);
+			int currWork = count * numStreams + s;
+			if(i == numSubMatrixB && currWork == numSubMatrixA){
+				copyElements(C,  c_h[s], subRows, subCols, m, n, currWork, i, overflowA, overflowB, beta);
 			}else if(i == numSubMatrixB){
-				copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, 0, overflowB);
-			}else if(currStream == numSubMatrixA){
-				copyElements(C,  c_h[s], subRows, subCols, m, n, currStream, i, overflowA, 0);
+				copyElements(C,  c_h[s], subRows, subCols, m, n, currWork, i, 0, overflowB, beta);
+			}else if(currWork == numSubMatrixA){
+				copyElements(C,  c_h[s], subRows, subCols, m, n, currWork, i, overflowA, 0, beta);
 			}else{
-				copyElements(C, c_h[s], subRows, subCols, m, n, currStream, i, 0, 0);
+				copyElements(C, c_h[s], subRows, subCols, m, n, currWork, i, 0, 0, beta);
 			}
 
 		}

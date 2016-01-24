@@ -6,10 +6,10 @@ EXE1	    = msplit-alg1
 EXE2		= msplit-alg2
 EXE3		= msplit-alg3-multi
 EXE4		= msplit-alg3-seq
-OBJ1	    = main1.o support.o
-OBJ2		= main2.o support.o
-OBJ3		= main3.o support.o
-OBJ4		= main4.o support.o
+OBJ1	    = main1.o support.o common.o
+OBJ2		= main2.o support.o common.o
+OBJ3		= main3.o support.o common.o
+OBJ4		= main4.o support.o common.o
 
 default: $(EXE1)
 
@@ -21,20 +21,23 @@ default: $(EXE1)
 
 4: $(EXE4)
 
-main1.o: main1.cu kernel1.cu support.h
+main1.o: main1.cu kernel1.cu support.h common.h
 	$(NVCC) -c -o $@ main1.cu $(NVCC_FLAGS)
 
-main2.o: main2.cu kernel2.cu support.h
+main2.o: main2.cu kernel2.cu support.h common.h
 	$(NVCC) -c -o $@ main2.cu $(NVCC_FLAGS)
 
-main3.o: main3.cu kernel3.cu support.h
+main3.o: main3.cu kernel3.cu support.h common.h
 	$(NVCC) -c -o $@ main3.cu $(NVCC_FLAGS) $(NVCC_SPEC_FLAGS)
 
-main4.o: main4.cu kernel4.cu support.h
+main4.o: main4.cu kernel4.cu support.h common.h
 	$(NVCC) -c -o $@ main4.cu $(NVCC_FLAGS)
 
 support.o: support.cu support.h
 	$(NVCC) -c -o $@ support.cu $(NVCC_FLAGS)
+
+common.o: common.h common.cu
+	$(NVCC) -c -o $@ common.cu $(NVCC_FLAGS)
 
 $(EXE1): $(OBJ1)
 	$(NVCC) $(OBJ1) -o $(EXE1) $(LD_FLAGS)

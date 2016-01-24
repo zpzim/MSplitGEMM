@@ -2,62 +2,11 @@
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
 
+#include "common.h"
+
 const int num_submatrix = 8;
 
-float * doMultiply2Matrices(
-        int a1Rows, int a1Cols,  float * A1,
-        int a2Rows, int a2Cols,  float * A2,
-	float* C, float alpha, float beta)
-{
-    cublasHandle_t  handle;
 
-    cublasCreate (&handle ) ;
-
-    cublasSgemm(handle,CUBLAS_OP_N, CUBLAS_OP_N,
-                  a2Cols, a1Rows, a1Cols,
-                  &alpha,
-                  A2, a2Cols,
-                  A1, a1Cols,
-                  &beta,
-                  C, a2Cols );
-
-    cublasDestroy ( handle ) ;
-
-    return C ;
-
-
-}
-
-void PrintMatrix(char name[], int rows, int cols, const float* m){
-  printf("%s\n", name);
-  for(int row = 0; row < rows; ++row){
-	for(int col = 0; col < cols; ++col){
-		printf("%f ", m[row * cols + col]);
-	}
-	printf("\n");
-  }
-}
-
-void copyElements(float* out, float* entry, unsigned long long eRows, unsigned long long eCols, unsigned long long oRows, unsigned long long oCols, unsigned long long x, unsigned long long y,
-	unsigned long long ofA, unsigned long long ofB){
-	unsigned long long counterRows = eRows;
-	unsigned long long counterCols = eCols;
-	if(ofA){
-		counterRows = ofA;
-	}
-	if(ofB){
-		counterCols = ofB;	
-	}
-	for(unsigned long long i = 0; i < counterRows; ++i){
-		for(unsigned long long j = 0; j < counterCols; ++j){
-			out[x*eRows*oCols + (i*oCols) + (y*eCols + j)] = entry[i*eCols + j];
-		}
-
-	}
-
-
-
-}
 
 void msplitm(char transa, char transb, unsigned long long m, unsigned long long n, unsigned long long k, float alpha, const float *A, int lda, const float *B, int ldb, float beta, float *C, int ldc)
 {
@@ -127,16 +76,16 @@ void msplitm(char transa, char transb, unsigned long long m, unsigned long long 
 			cudaMalloc((void**) &a, sizeof(float) * subRows * k);
 			cudaMalloc((void**) &c, sizeof(float) * subCols * subRows);
 			cudaMemcpy(a, temp, sizeof(float)*subRows*k, cudaMemcpyHostToDevice);
-			doMultiply2Matrices(subRows, k, a, k, subCols, b, c, alpha, beta); 			
+			doMultiply2Matrices(subRows, k, a, k, subCols, b, c, alpha); 			
 			cudaMemcpy(temp, c, sizeof(float)*subRows*subCols, cudaMemcpyDeviceToHost);
 			if(i == numSubMatrixB && y == numSubMatrixA){
-				copyElements(C, temp, subRows, subCols, m, n, y, i, overflowA, overflowB);
+				copyElements(C, temp, subRows, subCols, m, n, y, i, overflowA, overflowB, beta);
 			}else if(i == numSubMatrixB){
-				copyElements(C, temp, subRows, subCols, m, n, y, i, 0, overflowB);
+				copyElements(C, temp, subRows, subCols, m, n, y, i, 0, overflowB, beta);
 			}else if(y == numSubMatrixA){
-				copyElements(C, temp, subRows, subCols, m, n, y, i, overflowA, 0);
+				copyElements(C, temp, subRows, subCols, m, n, y, i, overflowA, 0, beta);
 			}else{
-				copyElements(C, temp, subRows, subCols, m, n, y, i, 0, 0);
+				copyElements(C, temp, subRows, subCols, m, n, y, i, 0, 0, beta);
 			}
 			free(temp);
 			cudaFree(a);

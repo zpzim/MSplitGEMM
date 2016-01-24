@@ -4,6 +4,8 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include "common.h"
+
 const int num_submatrix = 16;
 const int numStreams = 2;
 const int num_threads = numStreams;
@@ -44,64 +46,6 @@ char threads_active[num_threads];
 cublasHandle_t handles[numStreams];
 
 
-
-
-float * doMultiply2Matrices(
-        int a1Rows, int a1Cols,  float * A1,
-        int a2Rows, int a2Cols,  float * A2,
-	float* C, cudaStream_t cudaStream, cublasHandle_t h)
-{
-
-
-
-    cublasSetStream(h, cudaStreamPerThread) ;
-
-    cublasStatus_t stat = cublasSgemm(h,CUBLAS_OP_N, CUBLAS_OP_N,
-                  a2Cols, a1Rows, a1Cols,
-                  &ALPHA,
-                  A2, a2Cols,
-                  A1, a1Cols,
-                  &BETA,
-                  C, a2Cols );
-
-    return C ;
-
-
-}
-
-void PrintMatrix(char name[], int rows, int cols, const float* m){
-  printf("%s\n", name);
-  for(int row = 0; row < rows; ++row){
-	for(int col = 0; col < cols; ++col){
-		printf("%f ", m[row * cols + col]);
-	}
-	printf("\n");
-  }
-}
-
-void copyElements(float* out, float* entry, unsigned long long eRows, unsigned long long eCols, unsigned long long oRows, unsigned long long oCols, unsigned long long x, unsigned long long y,
-	unsigned long long ofA, unsigned long long ofB){
-	unsigned long long counterRows = eRows;
-	unsigned long long counterCols = eCols;
-	if(ofA){
-		counterRows = ofA;
-	}
-	if(ofB){
-		counterCols = ofB;	
-	}
-	for(unsigned long long i = 0; i < counterRows; ++i){
-		for(unsigned long long j = 0; j < counterCols; ++j){
-			
-			out[x*eRows*oCols + (i*oCols) + (y*eCols + j)] = entry[i*eCols + j];
-		}
-
-	}
-
-
-
-}
-
-
 void* mult(void * threadArg){
 	
 	struct thread_args* data = (struct thread_args*) threadArg;
@@ -133,22 +77,22 @@ void* mult(void * threadArg){
 		}			
 	}
 	cudaMemcpyAsync(a[threadId], a_h[threadId], sizeof(float)*subRows*k, cudaMemcpyHostToDevice);
-	doMultiply2Matrices(subRows, k, a[threadId], k, subCols, b, c[threadId], 0, handles[threadId]); 	
+	doMultiply2MatricesStreaming(subRows, k, a[threadId], k, subCols, b, c[threadId], 0, handles[threadId], ALPHA); 	
 	cudaMemcpyAsync(c_h[threadId], c[threadId], sizeof(float)*subRows*subCols, cudaMemcpyDeviceToHost);
 	cudaStreamSynchronize(cudaStreamPerThread);
 	if(i == numSubMatrixB && y == numSubMatrixA){
-		copyElements(C,  c_h[threadId], subRows, subCols, m, n, y, i, overflowA, overflowB);
+		copyElements(C,  c_h[threadId], subRows, subCols, m, n, y, i, overflowA, overflowB, BETA);
 	}else if(i == numSubMatrixB){
-		copyElements(C,  c_h[threadId], subRows, subCols, m, n, y, i, 0, overflowB);
+		copyElements(C,  c_h[threadId], subRows, subCols, m, n, y, i, 0, overflowB, BETA);
 	}else if(y == numSubMatrixA){
-		copyElements(C,  c_h[threadId], subRows, subCols, m, n, y, i, overflowA, 0);
+		copyElements(C,  c_h[threadId], subRows, subCols, m, n, y, i, overflowA, 0, BETA);
 	}else{
-		copyElements(C, c_h[threadId], subRows, subCols, m, n, y, i, 0, 0);
+		copyElements(C, c_h[threadId], subRows, subCols, m, n, y, i, 0, 0, BETA);
 	}
 	pthread_mutex_lock(&running_mutex);
    	running_threads--;
 	threads_active[threadId] = 0;
-   	pthread_mutex_unlock(&running_mutex);	
+   	pthread_mutex_unlock(&running_mutex);
 	pthread_exit(0);
 	
 
