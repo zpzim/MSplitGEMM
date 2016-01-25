@@ -14,13 +14,16 @@ For normal matricies, using cuBLAS alone would be sufficient. For extremely larg
 
 This repository contains four algorithms that implement the above equation in different ways. The algorithms here each have their own specific use cases, based on the advantages each one provides.  
 
-# To Compile:
-make N will generate executable for algorithm N
-    make 1 will generate Algorithm 1
-    make 2 will generate Algorithm 2
-    make 3 will generate Algorithm 3 multithreaded
-    make 4 will generate Algorithm 3 sequential
+# To Build/Run:
+     make N will generate executable for algorithm N
+     make 1 will generate Algorithm 1
+     make 2 will generate Algorithm 2
+     make 3 will generate Algorithm 3
+     make 4 will generate Algorithm 4
 
+Run the executable, providing a single integer as a command line argument that specifies the size of the square matrices. The application supports testing non-square matrices, but these operations are not yet supported in the algorithms.
+
+    
 
 
 # Algorithm 1: Generation of one output matrix at a time:    
