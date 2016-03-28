@@ -1,5 +1,5 @@
 NVCC        = nvcc
-NVCC_FLAGS  = -O3 -I/usr/local/cuda/include -L/usr/local/cuda/lib64/ -lcublas_static -lculibos -lcudart_static -lpthread -ldl
+NVCC_FLAGS  = -O3 -I/usr/local/cuda/include  -lcublas_static -lculibos -lcudart_static -lpthread -ldl
 NVCC_SPEC_FLAGS = --default-stream per-thread
 LD_FLAGS    = -I/usr/local/cuda/include -L/usr/local/cuda/lib64/ -lcublas_static -lculibos -lcudart_static -lpthread -ldl
 EXE1	    = msplit-alg1
@@ -21,17 +21,17 @@ default: $(EXE1)
 
 4: $(EXE4)
 
-main1.o: main1.cu kernel1.cu support.h common.h
-	$(NVCC) -c -o $@ main1.cu $(NVCC_FLAGS)
+main1.o: main.cu kernel1.cu support.h common.h
+	$(NVCC) -c -o $@ main.cu -DKERNEL1=0 $(NVCC_FLAGS)
 
-main2.o: main2.cu kernel2.cu support.h common.h
-	$(NVCC) -c -o $@ main2.cu $(NVCC_FLAGS)
+main2.o: main.cu kernel2.cu support.h common.h
+	$(NVCC) -c -o $@ main.cu -DKERNEL2=0 $(NVCC_FLAGS)
 
-main3.o: main3.cu kernel3.cu support.h common.h
-	$(NVCC) -c -o $@ main3.cu $(NVCC_FLAGS) $(NVCC_SPEC_FLAGS)
+main3.o: main.cu kernel3.cu support.h common.h
+	$(NVCC) -c -o $@ main.cu -DKERNEL3=0 $(NVCC_FLAGS) $(NVCC_SPEC_FLAGS)
 
-main4.o: main4.cu kernel4.cu support.h common.h
-	$(NVCC) -c -o $@ main4.cu $(NVCC_FLAGS)
+main4.o: main.cu kernel4.cu support.h common.h
+	$(NVCC) -c -o $@ main.cu -DKERNEL4=0 $(NVCC_FLAGS)
 
 support.o: support.cu support.h
 	$(NVCC) -c -o $@ support.cu $(NVCC_FLAGS)
