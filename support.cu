@@ -7,7 +7,7 @@
 void verify(float *A, float *B, float *C, unsigned int m, unsigned int k,
   unsigned int n) {
 
-  const float relativeTolerance = 1e-6;
+  const float relativeTolerance = 1e-5;
 
   for(int row = 0; row < m; ++row) {
     for(int col = 0; col < n; ++col) {
