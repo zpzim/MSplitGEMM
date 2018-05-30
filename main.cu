@@ -10,8 +10,8 @@
 #ifdef KERNEL3
 #include "kernel3.cu"
 #endif
-#ifdef KERNEL3
-#include "kernel3.cu"
+#ifdef KERNEL4
+#include "kernel4.cu"
 #endif
 
 #include "support.h"
@@ -62,13 +62,13 @@ int main (int argc, char *argv[])
     B_sz = matBrow*matBcol;
     C_sz = matArow*matBcol;
 
-    A_h = (float*) malloc( sizeof(float)*A_sz );
+    cudaMallocHost((void**)&A_h, sizeof(float)*A_sz);
     for (unsigned int i=0; i < A_sz; i++) { A_h[i] = (rand()%100)/100.00; }
 
-    B_h = (float*) malloc( sizeof(float)*B_sz );
+    cudaMallocHost((void**)&B_h, sizeof(float)*B_sz);
     for (unsigned int i=0; i < B_sz; i++) { B_h[i] = (rand()%100)/100.00; }
 
-    C_h = (float*) malloc( sizeof(float)*C_sz );
+    cudaMallocHost((void**)&C_h, sizeof(float)*C_sz);
 
     stopTime(&timer); printf("%f s\n", elapsedTime(timer));
     printf("    A: %u x %u\n    B: %u x %u\n    C: %u x %u\n", matArow, matAcol,
@@ -89,9 +89,9 @@ int main (int argc, char *argv[])
 
     // Free memory ------------------------------------------------------------
 
-    free(A_h);
-    free(B_h);
-    free(C_h);
+    cudaFreeHost(A_h);
+    cudaFreeHost(B_h);
+    cudaFreeHost(C_h);
 
 
 
